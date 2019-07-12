@@ -54,6 +54,12 @@ type Migration struct {
 
 	// BytesRead holds the number of Bytes read from the migration source.
 	BytesRead int64
+
+	// bytesPeeked holds the number of Bytes peeked from the migration source.
+	bytesPeeked int64
+
+	// peeked determines whether or not the migration has been buffered or not
+	peeked bool
 }
 
 // NewMigration returns a new Migration and sets the body, identifier,
@@ -129,9 +135,13 @@ func (m *Migration) Buffer() error {
 
 	// start reading from body, peek won't move the read pointer though
 	// poor man's solution?
-	if _, err := b.Peek(int(m.BufferSize)); err != nil && err != io.EOF {
+	p, err := b.Peek(int(m.BufferSize))
+	m.peeked = true
+	if err != nil && err != io.EOF {
 		return err
 	}
+
+	m.bytesPeeked += int64(len(p))
 
 	m.FinishedBuffering = time.Now()
 
@@ -139,6 +149,7 @@ func (m *Migration) Buffer() error {
 	// something starts reading from m.Buffer
 	n, err := b.WriteTo(m.bufferWriter)
 	if err != nil {
+		fmt.Println("Error writing to bufferWriter:", err)
 		return err
 	}
 
@@ -157,4 +168,13 @@ func (m *Migration) Buffer() error {
 	}
 
 	return nil
+}
+
+// IsEmpty determines whether or not the migration is empty
+// If the migration data has not been buffered yet, then the migration is assumed to not be empty
+func (m *Migration) IsEmpty() bool {
+	if m.peeked {
+		return m.bytesPeeked <= 0
+	}
+	return false
 }

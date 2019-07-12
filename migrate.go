@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hashicorp/go-multierror"
+	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -739,7 +740,13 @@ func (m *Migrate) runMigrations(ret <-chan interface{}) error {
 				return err
 			}
 
-			if migr.Body != nil {
+			if migr.IsEmpty() {
+				m.logVerbosePrintf("Skipping empty migration %v\n", migr.LogString())
+				// Read the empty migration so the migration can be closed and resources properly returned
+				if _, err := ioutil.ReadAll(migr.BufferedBody); err != nil {
+					return err
+				}
+			} else if migr.Body != nil {
 				m.logVerbosePrintf("Read and execute %v\n", migr.LogString())
 				if err := m.databaseDrv.Run(migr.BufferedBody); err != nil {
 					return err
